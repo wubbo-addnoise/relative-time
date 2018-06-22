@@ -1,5 +1,7 @@
 (function(){
 
+    var times, tzOffset;
+
     var Translate = {
         en: {
             "ago": "ago",
@@ -37,46 +39,129 @@
         }
     };
 
+    function translateMessage(messageKey, vars) {
+        var message, key;
 
-    $.fn.relativeTime = function (options) {
-        var tzOffset, times, interval, index, time, m, date, tz;
+        vars = vars||{};
+
+        if (!(messageKey in Translate.current)) {
+            return messageKey;
+        }
+
+        if (Translate.current[messageKey] instanceof Function) {
+            return Translate.current[messageKey](vars);
+        }
+
+        message = Translate.current[messageKey];
+        for (key in vars) {
+            if ((key == 'hour' || key == 'minute') && vars[key] < 10) {
+                vars[key] = '0' + vars[key];
+            }
+            message = message.replace(new RegExp('\\{' + key + '\\}', 'g'), vars[key]);
+        }
+
+        return message;
+    }
+
+    function updateTimes() {
+        var now, purge, index, time, dt, lmIn, absPrefix, html, secondsLeft;
+
+        purge = [];
+        now = new Date();
+
+        for (index = 0; index < times.length; index++) {
+            time = times[index];
+
+            if (!time.parentElement) {
+                purge.push(time);
+            } else {
+                dt = now.getTime() - time.timestamp;
+
+                // Past
+                if (dt < 0) {
+                    dt = -dt;
+                    lmIn = time.options.within ? 'within' : 'in';
+                    absPrefix = time.options.within ? Translate.current.before + ' ' : '';
+                    secondsLeft = 86400000 - (now.getHours() * 3600000 + now.getMinutes() * 60000 + now.getSeconds() * 1000);
+
+                    if (dt < 15000) {
+                        html = Translate.current[lmIn] + ' ' + translateMessage('few_seconds');
+                    } else if (dt < 60000) {
+                        html = Translate.current[lmIn] + ' ' + translateMessage('less_than_a_minute');
+                    } else if (dt < 3600000) {
+                        html = Translate.current[lmIn] + ' ' + translateMessage('n_minutes', { minutes: Math.round(dt / 60000) });
+                    } else if (dt < 86400000) {
+                        if (dt < secondsLeft) {
+                            html = Translate.current[lmIn] + ' ' + translateMessage('n_hours', { hours: Math.round(dt / 3600000) });
+                        } else {
+                            html = absPrefix + translateMessage('tomorrow_at', { hour: time.date.getHours(), minute: time.date.getMinutes() });
+                        }
+                    } else if (dt < 172800000) {
+                        if (dt < secondsLeft + 86400000) {
+                            html = absPrefix + translateMessage('tomorrow_at', { hour: time.date.getHours(), minute: time.date.getMinutes() });
+                        } else {
+                            html = absPrefix + translateMessage('this_year_at', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], hour: time.date.getHours(), minute: time.date.getMinutes() });
+                        }
+                    } else if (dt < 30758400000) {
+                        html = absPrefix + translateMessage('this_year_at', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], hour: time.date.getHours(), minute: time.date.getMinutes() });
+                    } else {
+                        html = absPrefix + translateMessage('absolute_date', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], year: time.date.getFullYear(), hour: time.date.getHours(), minute: time.date.getMinutes() });
+                    }
+                } else {
+                    secondsLeft = now.getHours() * 3600000 + now.getMinutes() * 60000 + now.getSeconds() * 1000;
+
+                    if (dt < 15000) {
+                        html = translateMessage('few_seconds') + ' ' + Translate.current.ago;
+                    } else if (dt < 60000) {
+                        html = translateMessage('less_than_a_minute') + ' ' + Translate.current.ago;
+                    } else if (dt < 3600000) {
+                        html = translateMessage('n_minutes', { minutes: Math.round(dt / 60000) }) + ' ' + Translate.current.ago;
+                    } else if (dt < 86400000) {
+                        if (dt < secondsLeft) {
+                            html = translateMessage('n_hours', { hours: Math.round(dt / 3600000) }) + ' ' + Translate.current.ago;
+                        } else {
+                            html = translateMessage('yesterday_at', { hour: time.date.getHours(), minute: time.date.getMinutes() });
+                        }
+                    } else if (dt < 172800000) {
+                        if (dt < secondsLeft + 86400000) {
+                            html = translateMessage('yesterday_at', { hour: time.date.getHours(), minute: time.date.getMinutes() });
+                        } else {
+                            html = translateMessage('this_year_at', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], hour: time.date.getHours(), minute: time.date.getMinutes() });
+                        }
+                    } else if (dt < 30758400000) {
+                        html = translateMessage('this_year_at', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], hour: time.date.getHours(), minute: time.date.getMinutes() });
+                    } else {
+                        html = translateMessage('absolute_date', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], year: time.date.getFullYear(), hour: time.date.getHours(), minute: time.date.getMinutes() });
+                    }
+                }
+
+                if (time.options.lowerCase) {
+                    html = html.toLowerCase();
+                }
+
+                time.innerHTML = html;
+            }
+        }
+
+        for (index = 0; index < purge.length; index++) {
+            times.splice(times.indexOf(purge[index]), 1);
+        }
+
+        if (times.length == 0) {
+            clearInterval(interval);
+        }
+    }
+
+    function RelativeTime(elements, options) {
+        var interval, index, time, m, date, tz;
 
         options = options||{};
         if (!('lowerCase' in options)) options.lowerCase = false;
         if (!('within' in options)) options.within = false;
 
-        function translateMessage(messageKey, vars) {
-            var message, key;
-
-            vars = vars||{};
-
-            if (!(messageKey in Translate.current)) {
-                return messageKey;
-            }
-
-            if (Translate.current[messageKey] instanceof Function) {
-                return Translate.current[messageKey](vars);
-            }
-
-            message = Translate.current[messageKey];
-            for (key in vars) {
-                if ((key == 'hour' || key == 'minute') && vars[key] < 10) {
-                    vars[key] = '0' + vars[key];
-                }
-                message = message.replace(new RegExp('\\{' + key + '\\}', 'g'), vars[key]);
-            }
-
-            return message;
-        }
-
-        times = [];
-        this.each(function () {
-            times.push(this);
-        });
-        tzOffset = (new Date()).getTimezoneOffset();
-
-        for (index = 0; index < times.length; index++) {
-            time = times[index];
+        for (index = 0; index < elements.length; index++) {
+            time = elements[index];
+            times.push(time);
 
             m = time.getAttribute('datetime').match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\+|-)(\d{2})(\d{2})/);
             date = new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]), parseInt(m[4]), parseInt(m[5]), parseInt(m[6]));
@@ -87,100 +172,10 @@
             // Fix timezone
             time.timestamp = date.getTime() + tz * 60000;
             time.date = new Date(time.timestamp);
-        }
-
-        function updateTimes() {
-            var now, purge, index, time, dt, lmIn, absPrefix, html, secondsLeft;
-
-            purge = [];
-            now = new Date();
-
-            for (index = 0; index < times.length; index++) {
-                time = times[index];
-
-                if (!time.parentElement) {
-                    purge.push(time);
-                } else {
-                    dt = now.getTime() - time.timestamp;
-
-                    // Past
-                    if (dt < 0) {
-                        dt = -dt;
-                        lmIn = options.within ? 'within' : 'in';
-                        absPrefix = options.within ? Translate.current.before + ' ' : '';
-                        secondsLeft = 86400000 - (now.getHours() * 3600000 + now.getMinutes() * 60000 + now.getSeconds() * 1000);
-
-                        if (dt < 15000) {
-                            html = Translate.current[lmIn] + ' ' + translateMessage('few_seconds');
-                        } else if (dt < 60000) {
-                            html = Translate.current[lmIn] + ' ' + translateMessage('less_than_a_minute');
-                        } else if (dt < 3600000) {
-                            html = Translate.current[lmIn] + ' ' + translateMessage('n_minutes', { minutes: Math.round(dt / 60000) });
-                        } else if (dt < 86400000) {
-                            if (dt < secondsLeft) {
-                                html = Translate.current[lmIn] + ' ' + translateMessage('n_hours', { hours: Math.round(dt / 3600000) });
-                            } else {
-                                html = absPrefix + translateMessage('tomorrow_at', { hour: time.date.getHours(), minute: time.date.getMinutes() });
-                            }
-                        } else if (dt < 172800000) {
-                            if (dt < secondsLeft + 86400000) {
-                                html = absPrefix + translateMessage('tomorrow_at', { hour: time.date.getHours(), minute: time.date.getMinutes() });
-                            } else {
-                                html = absPrefix + translateMessage('this_year_at', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], hour: time.date.getHours(), minute: time.date.getMinutes() });
-                            }
-                        } else if (dt < 30758400000) {
-                            html = absPrefix + translateMessage('this_year_at', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], hour: time.date.getHours(), minute: time.date.getMinutes() });
-                        } else {
-                            html = absPrefix + translateMessage('absolute_date', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], year: time.date.getFullYear(), hour: time.date.getHours(), minute: time.date.getMinutes() });
-                        }
-                    } else {
-                        secondsLeft = now.getHours() * 3600000 + now.getMinutes() * 60000 + now.getSeconds() * 1000;
-
-                        if (dt < 15000) {
-                            html = translateMessage('few_seconds') + ' ' + Translate.current.ago;
-                        } else if (dt < 60000) {
-                            html = translateMessage('less_than_a_minute') + ' ' + Translate.current.ago;
-                        } else if (dt < 3600000) {
-                            html = translateMessage('n_minutes', { minutes: Math.round(dt / 60000) }) + ' ' + Translate.current.ago;
-                        } else if (dt < 86400000) {
-                            if (dt < secondsLeft) {
-                                html = translateMessage('n_hours', { hours: Math.round(dt / 3600000) }) + ' ' + Translate.current.ago;
-                            } else {
-                                html = translateMessage('yesterday_at', { hour: time.date.getHours(), minute: time.date.getMinutes() });
-                            }
-                        } else if (dt < 172800000) {
-                            if (dt < secondsLeft + 86400000) {
-                                html = translateMessage('yesterday_at', { hour: time.date.getHours(), minute: time.date.getMinutes() });
-                            } else {
-                                html = translateMessage('this_year_at', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], hour: time.date.getHours(), minute: time.date.getMinutes() });
-                            }
-                        } else if (dt < 30758400000) {
-                            html = translateMessage('this_year_at', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], hour: time.date.getHours(), minute: time.date.getMinutes() });
-                        } else {
-                            html = translateMessage('absolute_date', { day: time.date.getDate(), month: Translate.current.months[time.date.getMonth()], year: time.date.getFullYear(), hour: time.date.getHours(), minute: time.date.getMinutes() });
-                        }
-                    }
-
-                    if (options.lowerCase) {
-                        html = html.toLowerCase();
-                    }
-
-                    time.innerHTML = html;
-                }
-            }
-
-            for (index = 0; index < purge.length; index++) {
-                times.splice(times.indexOf(purge[index]), 1);
-            }
-
-            if (times.length == 0) {
-                clearInterval(interval);
-            }
+            time.options = options;
         }
 
         updateTimes();
-
-        interval = setInterval(updateTimes, 10000);
     };
 
     (function(){
@@ -197,5 +192,19 @@
 
         Translate.current = Translate[lang];
     })();
+
+
+    times = [];
+    tzOffset = (new Date()).getTimezoneOffset();
+    interval = setInterval(updateTimes, 10000);
+
+    if ('jQuery' in window) {
+        jQuery.fn.relativeTime = function(options) {
+            RelativeTime(this, options);
+            return this;
+        }
+    }
+
+    window.RelativeTime = RelativeTime;
 
 })();

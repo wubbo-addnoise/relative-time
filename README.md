@@ -4,8 +4,6 @@ Shows the time relative to now (e.g. 'a few seconds ago', '42 minutes ago' or 'i
 
 ## Installation
 
-This plugin requires jQuery (any version) to run
-
 ```
 <script src="/path/to/relative-time/relative-time.js"></script>
 ```
@@ -18,6 +16,9 @@ This plugin requires jQuery (any version) to run
 ...
 
 <script>
+RelativeTime(document.querySelectorAll('.relative-time'));
+
+// Or if you're using jQuery:
 $('.relative-time').relativeTime();
 </script>
 ```
