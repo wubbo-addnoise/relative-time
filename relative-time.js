@@ -161,18 +161,20 @@
 
         for (index = 0; index < elements.length; index++) {
             time = elements[index];
-            times.push(time);
 
             m = time.getAttribute('datetime').match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\+|-)(\d{2})(\d{2})/);
-            date = new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]), parseInt(m[4]), parseInt(m[5]), parseInt(m[6]));
-            tz = parseInt(m[8]) * 60 + parseInt(m[9]);
-            if (m[7] == '+') tz = -tz;
-            tz -= tzOffset;
+            if (m) {
+                times.push(time);
+                date = new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]), parseInt(m[4]), parseInt(m[5]), parseInt(m[6]));
+                tz = parseInt(m[8]) * 60 + parseInt(m[9]);
+                if (m[7] == '+') tz = -tz;
+                tz -= tzOffset;
 
-            // Fix timezone
-            time.timestamp = date.getTime() + tz * 60000;
-            time.date = new Date(time.timestamp);
-            time.options = options;
+                // Fix timezone
+                time.timestamp = date.getTime() + tz * 60000;
+                time.date = new Date(time.timestamp);
+                time.options = options;
+            }
         }
 
         updateTimes();
